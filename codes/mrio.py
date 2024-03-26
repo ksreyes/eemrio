@@ -6,7 +6,7 @@ class MRIO:
 
     np.seterr(divide='ignore', invalid='ignore')
 
-    def __init__(self, file_path, year, full=False):
+    def __init__(self, file_path, year, N=35, f=5, vc=6, full=False):
         
         years = utils.get_years(f'{file_path}')
         if year not in years:
@@ -17,9 +17,9 @@ class MRIO:
         self.year = year
         self.data = mrio.values
         self.shape = mrio.shape
-        self.N = 35
-        self.f = 5
-        self.G = int((self.shape[0] - 7) / self.N)
+        self.N = N
+        self.f = f
+        self.G = int((self.shape[0] - vc - 1) / self.N)
         
         '''Extract MRIO components'''
         
@@ -27,7 +27,7 @@ class MRIO:
         Z = self.data[:(self.G * self.N)][:, :(self.G * self.N)]
         Y_big = self.data[:(self.G * self.N)][:, (self.G * self.N):-1]
         Y = Y_big @ np.kron(np.eye(self.G, dtype=bool), np.ones((self.f, 1), dtype=bool))
-        va = np.sum(self.data[-7:-1][:, :(self.G * self.N)], axis=0)
+        va = np.sum(self.data[-vc-1:-1][:, :(self.G * self.N)], axis=0)
 
         self.x = SubMRIO(x, self.G, self.N)
         self.Z = SubMRIO(Z, self.G, self.N)
@@ -179,16 +179,54 @@ class SubMRIO:
 
     def subset(self, row=None, col=None):
         ''' 
-        Subsets a matrix or vector based on country indices.
+        Subsets a matrix or vector based on country indices. If row or col is None or 0, 
+        returns the entire row or column.
         '''
+
+        if not isinstance(row, list):
+            if row is not None:
+                row = [row]
+            else:
+                row = [0]
+        if not isinstance(col, list):
+            if col is not None:
+                col = [col]
+            else:
+                col = [0]
+        
+        row_signs = [row_i >= 0 for row_i in row]
+        if not all(sign == row_signs[0] for sign in row_signs):
+            raise ValueError("Row indexes must be either all positive or all negative.")
+        
+        col_signs = [col_i >= 0 for col_i in col]
+        if not all(sign == col_signs[0] for sign in col_signs):
+            raise ValueError("Column indexes must be either all positive or all negative.")
+
+        # If input is a vector
+
         if len(self.data.shape) == 1:
             n = self.data.shape[0]
-            ix = np.arange(0, n)
-            if row is not None and row != 0:
-                ix = np.arange((abs(row)-1) * self.N, abs(row) * self.N)
-                if row < 0:
-                    ix = np.setdiff1d(np.arange(n), ix)
+
+            if row_signs[0]: 
+                ix = []
+                for row_i in row:
+                    if row_i != 0:
+                        ix_i = np.arange((abs(row_i)-1) * self.N, abs(row_i) * self.N)
+                        ix.append(ix_i)
+                if ix:
+                    ix = np.concatenate(ix)
+                else:
+                    ix = np.arange(n)
+
+            else: 
+                ix = np.arange(n)
+                for row_i in row:
+                    ix_i = np.arange((abs(row_i)-1) * self.N, abs(row_i) * self.N)
+                    ix = np.setdiff1d(ix, ix_i)
+            
             return SubMRIO(self.data[ix], self.G, self.N)
+
+        # If input is a matrix
 
         else:
             nrow = self.data.shape[0]
@@ -200,19 +238,38 @@ class SubMRIO:
             if ncol % self.N != 0:
                 Ncol = 1
 
-            rowix = np.arange(0, nrow)
-            colix = np.arange(0, ncol)
-
-            if row is not None and row != 0:
-                rowix = np.arange((abs(row)-1) * Nrow, abs(row) * Nrow)
-                if row < 0:
-                    rowix = np.setdiff1d(np.arange(nrow), rowix)
-
-            if col is not None and col != 0:
-                colix = np.arange((abs(col)-1) * Ncol, abs(col) * Ncol)
-                if col < 0:
-                    colix = np.setdiff1d(np.arange(ncol), colix)
+            if row_signs[0]: 
+                rowix = []
+                for row_i in row:
+                    if row_i != 0:
+                        rowix_i = np.arange((abs(row_i)-1) * Nrow, abs(row_i) * Nrow)
+                        rowix.append(rowix_i)
+                if rowix:
+                    rowix = np.concatenate(rowix)
+                else:
+                    rowix = np.arange(nrow)
+            else: 
+                rowix = np.arange(nrow)
+                for row_i in row:
+                    rowix_i = np.arange((abs(row_i)-1) * Nrow, abs(row_i) * Nrow)
+                    rowix = np.setdiff1d(rowix, rowix_i)
             
+            if col_signs[0]: 
+                colix = []
+                for col_i in col:
+                    if col_i != 0:
+                        colix_i = np.arange((abs(col_i)-1) * Ncol, abs(col_i) * Ncol)
+                        colix.append(colix_i)
+                if colix:
+                    colix = np.concatenate(colix)
+                else:
+                    colix = np.arange(ncol)
+            else: 
+                colix = np.arange(ncol)
+                for col_i in col:
+                    colix_i = np.arange((abs(col_i)-1) * Ncol, abs(col_i) * Ncol)
+                    colix = np.setdiff1d(colix, colix_i)
+
             return SubMRIO(self.data[np.ix_(rowix, colix)], self.G, self.N)
     
     def asvector(self):
@@ -310,6 +367,17 @@ class SubMRIO:
         for k in range(GG):
             matrix = np.hstack((matrix, np.diag(vector[k * self.N:(k+1) * self.N])))
         return SubMRIO(matrix, self.G, self.N)
+    
+    def diagstack(self, by='row', stack='v'):
+        '''
+        Diagonalizes each row (default) or column of a matrix and stacks them vertically or horizontally
+        '''
+        shape = self.shape
+        data = self.data
+        result = []
+        
+        for by in data:
+            np.diag(by)
 
 class EE:
 
