@@ -1,0 +1,11 @@
+data
+documents
+readings
+codes/__pycache__
+codes/draft*
+
+*Rproj
+.Rhistory
+.Rproj.user
+
+.DS_store
