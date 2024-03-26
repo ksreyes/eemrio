@@ -1,3 +1,4 @@
+# folders
 data
 documents
 readings
@@ -9,3 +10,15 @@ codes/draft*
 .Rproj.user
 
 .DS_store
+
+# environments
+.env
+.venv
+
+# distribution
+lib/
+bin/
+
+# others
+eemrio/pyvenv.cfg
+eemrio/share/man/man1/ttx.1
