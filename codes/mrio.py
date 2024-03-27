@@ -368,16 +368,27 @@ class SubMRIO:
             matrix = np.hstack((matrix, np.diag(vector[k * self.N:(k+1) * self.N])))
         return SubMRIO(matrix, self.G, self.N)
     
-    def diagstack(self, by='row', stack='v'):
+    def diagstack(self, by='row'):
         '''
         Diagonalizes each row (default) or column of a matrix and stacks them vertically or horizontally
         '''
         shape = self.shape
-        data = self.data
-        result = []
+
+        if len(shape) == 1:
+            raise ValueError('This method is only for matrices.')
         
-        for by in data:
-            np.diag(by)
+        data = self.data
+        matrices = []
+        if by == 'row':
+            for row in data:
+                matrices.append(np.diag(row))
+            result = np.vstack(matrices)
+        if by == 'col':
+            for col in data.T:
+                matrices.append(np.diag(col))
+            result = np.hstack(matrices)
+        
+        return SubMRIO(result, self.G, self.N)
 
 class EE:
 
@@ -442,9 +453,9 @@ class EE:
         self.data = ee.values[:, groups:]
         self.shape = self.data.shape
         if by is None:
-            self.rows = 'Total'
+            self.rows = ['Total']
         else:
-            self.rows = ee.iloc[:, 0:groups]
+            self.rows = ee.iloc[:, 0:groups].values
             
         '''Extract EE components'''
         
