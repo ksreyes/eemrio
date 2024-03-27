@@ -463,3 +463,28 @@ class EE:
         Ef = self.data[:, (self.G * self.N):]
         self.E = SubMRIO(E, self.G, self.N)
         self.Ef = SubMRIO(Ef, self.G, self.N)
+
+        '''Index generators'''
+    
+    def country_inds(self, exclude=None):
+
+        if exclude is not None and 1 <= exclude <= self.G:
+            return np.setdiff1d(np.arange(1, self.G+1, dtype=np.uint8), exclude)
+        if exclude is not None and not (1 <= exclude <= self.G):
+            raise ValueError(f"'exclude' must be from {1} to {self.G}.")
+        else:
+            return np.arange(1, self.G+1, dtype=np.uint8)
+    
+    def sector_inds(self, agg=35):
+
+        c5_ind = np.array([1, 1, 2, 2, 2, 2, 2, 3, 3, 2, 3, 3, 3, 3, 3, 2, 2, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5], dtype=np.uint8)
+        c15_ind = np.array([1, 2, 3, 3, 3, 3, 3, 4, 4, 3, 3, 4, 4, 4, 4, 3, 5, 6, 7, 7, 7, 8, 9, 9, 9, 9, 10, 11, 12, 12, 13, 14, 14, 15, 15], dtype=np.uint8)
+        
+        if agg == 5:
+            return c5_ind
+        if agg == 15:
+            return c15_ind
+        if agg == 35:
+            return np.arange(1, self.N+1, dtype=np.uint8)
+        else:
+            raise ValueError("'agg' must be either 5, 15, or 35.")
