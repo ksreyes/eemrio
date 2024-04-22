@@ -74,6 +74,45 @@ for i in years:
 
         
 
+
+
+
+########################################################################################
+
+## Compiling EE tables 
+
+ee_table = {}
+
+for i in years:
+    raw = pd.read_excel("/Users/divyasangaraju/Library/CloudStorage/OneDrive-SharedLibraries-AsianDevelopmentBank/SDIU - GVC/Climate Change/IO Publication 2024/EE-MRIOTs_as of March 2024/ADB-EE-MRIO-"+str(i)+".xlsx")
+    gas_rows = raw.index[raw.iloc[:, 2] == 'Gas'].tolist()[0]
+    temp=raw[gas_rows:]
+    new_row_dict = raw.iloc[[4, 5]]
+    ee_t = pd.concat([new_row_dict, temp], ignore_index=True)
+    ee_table[i] = ee_t
+    print(str(i)+" Complete")
+
+
+## Compute Sum of EE Emission over years 
+merged_ee = {}
+for i in years:
+    test1 = ee_table[i]
+    test2 = test1.T
+    test2 = test2.rename(columns={test2.columns[0]:'mrio_code'})
+    test2 = test2.groupby('mrio_code').sum()
+    test2.columns = test1.iloc[1:,1]
+    test2 = test2.T.reset_index()
+    test2 = test2.rename(columns={test2.columns[0]:'variable'})
+    test2 = test2.groupby('variable').sum()
+    test2 = test2.reset_index()
+    test2 = test2.melt(id_vars='variable', var_name='mrio_code', value_name='Value')
+    merged_ee[i] = test2 
+    test2=""
+
+
+## Combine data into 1 dataset
+
+    print(str(i) +" Complete")
 ########################################################################################
 
 ## Compute GDP from each year
@@ -622,6 +661,39 @@ plt.close()
 
 ########################################################################################
 
+# Bilateral Linkage Chart
+import pandas as pd
+import holoviews as hv
+from holoviews import opts, dim
 
+year = 2021
+
+hv.extension('matplotlib')
+hv.output(fig='svg', size=250)
+
+eby_energy= eby[eby['sector']=='Energy']
+
+eby_energy['emissions_inmil'] = eby_energy['emissions']/1000000
+e_producer_consumer = pd.DataFrame(eby_energy.groupby(['r','s','t'])['emissions_inmil'].sum()).sort_values(by='emissions_inmil',ascending=False).reset_index()
+e_producer_consumer=e_producer_consumer.dropna()
+e_producer_consumer = e_producer_consumer[e_producer_consumer.t ==year]
+e_producer_consumer=e_producer_consumer.rename(columns={'s':'source','r':'target','emissions_inmil':'value','t':'node'})
+e_producer_consumer = e_producer_consumer[['target','source','value']]
+
+country_dict = pd.read_csv('/Users/divyasangaraju/Documents/Work/ADB/IO Publication/RawData/countries.csv', encoding='latin1')
+country_dict.set_index('mrio')
+node = country_dict[['mrio_code','mrio']]
+node=node.rename(columns={'mrio_code':'name','mrio':'index'})
+
+
+########################################################################################
+########################################################################################
+# Bilateral Linkage Chart 
+nodes = hv.Dataset(node.reset_index(), 'index')
+e_producer_consumer['value'].fillna(0, inplace=True)
+#customization of chart
+img = hv.Chord((e_producer_consumer, nodes)).select(value=(0.3, None)).opts(
+    opts.Chord(fontsize={'title': 25, 'labels': 15, 'xticks': 20, 'yticks': 20},title="Bilateral Emission Flows " + str(year),cmap='Category10', node_size=10,sublabel_size=35, cbar_width=5,edge_cmap='Category10', edge_color=dim('source').astype(str), labels='name', node_color=dim('index').astype(str)))
+hv.render(img)
 
 
