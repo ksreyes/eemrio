@@ -4,12 +4,14 @@ import os
 import re
 import time
 
+
 G, N, f = 73, 35, 5
 
 output_mrio = f'mrio.parquet'
 output_ee = f'ee.parquet'
 
-files = [file for file in os.listdir(f'data/raw') if re.match(r'^ADB.*MRIO', file)]
+main_dir="/Users/divyasangaraju/Library/CloudStorage/OneDrive-SharedLibraries-AsianDevelopmentBank/SDIU - GVC/Climate Change/IO Publication 2024/EE-MRIOTs_as of March 2024"
+files = [file for file in os.listdir(main_dir) if re.match(r'^ADB.*MRIO', file)]
 files.sort()
 
 mrio = pd.DataFrame()
@@ -18,9 +20,9 @@ ee = pd.DataFrame()
 start = time.time()
 
 for file in files:
-
+    sub_dir = main_dir + "/"+file
     year = re.search('[0-9]{4}', file).group()
-    table_t = pd.read_excel(f'data/raw/{file}', skiprows=5, header=[0,1])
+    table_t = pd.read_excel(sub_dir, skiprows=5, header=[0,1])
 
     # Collapse MultiIndex headers into one
     table_t.columns = [f'{level_1}_{level_2}' for level_1, level_2 in table_t.columns]
@@ -55,7 +57,11 @@ for file in files:
 
     print(f'\n{year} done. \nTime elapsed: {time_elapsed}.')
 
+exp_dir= "/Users/divyasangaraju/Documents/Work/ADB/IO Publication/ee-output/"
+
+
+
 mrio['t'] = mrio['t'].astype(np.uint16)
 ee['t'] = ee['t'].astype(np.uint16)
-mrio.to_parquet(f'data/{output_mrio}', index=False)
-ee.to_parquet(f'data/{output_ee}', index=False)
+mrio.to_parquet((exp_dir+output_mrio), index=False)
+ee.to_parquet((exp_dir+output_ee), index=False)

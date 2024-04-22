@@ -1,23 +1,28 @@
 import pandas as pd
-from mrio import MRIO, EE
-from utils import get_years, ind_pattern, aggregate_sectors, convert_dtypes
+import codes.utils as utils
+import codes.mrio as mrio
+from codes.mrio import MRIO, EE
+from codes.utils import get_years, ind_pattern, aggregate_sectors, convert_dtypes
+
+
 
 input_mrio = 'mrio.parquet'
 input_ee = 'ee.parquet'
 output = 'eby.parquet'
-years = get_years(f'data/{input_mrio}')
+exp_dir= "/Users/divyasangaraju/Documents/Work/ADB/IO Publication/ee-output/"
+years = get_years((exp_dir+input_ee))
 
 df = pd.DataFrame()
 
 for year in years:
         
-    mrio = MRIO(f'data/{input_mrio}', year, full=True)
-    ee = EE(f'data/{input_ee}', year, by = 'sector')
+    mrio = MRIO(exp_dir+input_mrio, year, full=True)
+    ee = EE(exp_dir+input_ee, year, by = 'sector')
     G, N = mrio.G, mrio.N
 
     sector = ee.rows
     K = len(ee.rows)
-    e = ee.E @ (1/mrio.x).diag()
+    e = ee.E @ (1/mrio.x).diag() #emission coefficient
     BY = mrio.B @ mrio.Y
     EBY = e.diagstack() @ BY
 
@@ -39,4 +44,4 @@ eby = aggregate_sectors(
     cols_to_sum = ['emissions']
 )
 eby = convert_dtypes(eby)
-eby.to_parquet(f'data/{output}', index=False)
+eby.to_parquet(exp_dir+output, index=False)

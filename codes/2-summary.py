@@ -1,16 +1,23 @@
+import os
+
+os.chdir("/Users/divyasangaraju/Documents/GitHub/eemrio")
 import pandas as pd
-from mrio import EE
-from utils import get_years, aggregate_sectors, convert_dtypes, ind_pattern
+import codes.utils as utils
+import codes.mrio as mrio
+from codes.mrio import EE
+from codes.utils import get_years, aggregate_sectors, convert_dtypes, ind_pattern
 
 input = 'ee.parquet'
 output = 'summary.parquet'
-years = get_years(f'data/{input}')
+
+exp_dir= "/Users/divyasangaraju/Documents/Work/ADB/IO Publication/ee-output/"
+years = get_years((exp_dir+input))
 
 df = pd.DataFrame()
 
 for year in years:
 
-    ee = EE(f'data/{input}', year, by=['gas', 'sector'])
+    ee = EE(exp_dir+input, year, by=['gas', 'sector'])
     G, N, K = ee.G, ee.N, len(ee.rows)
     emissions = ee.E.t().asvector()
 
@@ -30,4 +37,4 @@ summary = aggregate_sectors(
     cols_to_sum = ['emissions']
 )
 summary = convert_dtypes(summary)
-summary.to_parquet(f'data/{output}', index=False)
+summary.to_parquet(exp_dir+output, index=False)
