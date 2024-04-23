@@ -72,10 +72,6 @@ for i in years:
         mriot_years[i] = raw
         print(str(i)+" Complete")
 
-        
-
-
-
 
 ########################################################################################
 
@@ -89,7 +85,12 @@ for i in years:
     temp=raw[gas_rows:]
     new_row_dict = raw.iloc[[4, 5]]
     ee_t = pd.concat([new_row_dict, temp], ignore_index=True)
-    ee_table[i] = ee_t
+    first_two_rows = ee_t.iloc[:2]
+    remaining_rows = ee_t.iloc[2:]
+    condition = remaining_rows.iloc[:,3] =="Energy"
+    filtered_remaining_rows = remaining_rows[condition]    
+    filtered_df = pd.concat([first_two_rows, filtered_remaining_rows])
+    ee_table[i] = filtered_df
     print(str(i)+" Complete")
 
 
@@ -108,10 +109,18 @@ for i in years:
     test2 = test2.melt(id_vars='variable', var_name='mrio_code', value_name='Value')
     merged_ee[i] = test2 
     test2=""
+    print(str(i)+" Complete")
 
 
 ## Combine data into 1 dataset
 
+merged_ee_comb = pd.DataFrame()
+merged_ee_comb['variable'] = merged_ee[2017]['variable']
+merged_ee_comb['mrio_code'] = merged_ee[2017]['mrio_code']
+
+for i in years:
+    merged_ee_comb = pd.merge(merged_ee_comb,merged_ee[i],on=['mrio_code','variable'],how='outer')
+    merged_ee_comb = merged_ee_comb.rename(columns={'Value':str(i)})    
     print(str(i) +" Complete")
 ########################################################################################
 
@@ -150,21 +159,19 @@ GDP_years_pctchg['2017_2021'] = (GDP_years[2021]/GDP_years[2017])-1
 ########################################################################################
 
 ## Compute Total Energy Emissions from each year
-energy_t=pd.DataFrame()
-energy_t = eby[eby['sector']=='Energy']
-preserved_columns = energy_t[['r','i','s']]
-energy_t = energy_t.pivot(columns='t',values='emissions')
-energy_t = pd.concat([preserved_columns, energy_t], axis=1)
-energy_t = energy_t.groupby('s').sum()
-energy_t =energy_t.drop(energy_t.columns[[0, 1]], axis=1)
-energy_t_pctchg = energy_t.pct_change(axis=1) * 100
-energy_t_pctchg['2017_2021'] = (energy_t[2021]/energy_t[2017])-1
 
-energy_t_pctchg = energy_t_pctchg.reset_index()
-energy_t_pctchg = energy_t_pctchg.rename(columns={'s': 'mrio'})
-country_dict = pd.read_csv('/Users/divyasangaraju/Documents/Work/ADB/IO Publication/RawData/countries.csv', encoding='latin1')
-energy_t_pctchg = pd.merge(energy_t_pctchg, country_dict, on='mrio', how='inner')
-energy_t_pctchg = energy_t_pctchg.rename(columns={'mrio_code': 's'})
+merged_ee_comb['consump'] = 1
+merged_ee_comb.loc[(merged_ee_comb['variable'] =='Main Activity Electricity and Heat Production')|(merged_ee_comb['variable'] =='Oil and Natural Gas'), 'consump'] = 0
+merged_ee_comb_filt = merged_ee_comb[merged_ee_comb['consump']==0]
+merged_ee_comb_filt = merged_ee_comb_filt.drop(columns=['consump'])
+merged_ee_comb_filt = merged_ee_comb_filt.groupby('mrio_code').sum()
+
+
+merged_ee_comb_filt_pctchg = merged_ee_comb_filt.pct_change(axis=1) * 100
+merged_ee_comb_filt_pctchg['2017_2021'] = (merged_ee_comb_filt["2021"]/merged_ee_comb_filt["2017"])-1
+
+merged_ee_comb_filt_pctchg = merged_ee_comb_filt_pctchg.reset_index()
+merged_ee_comb_filt_pctchg = merged_ee_comb_filt_pctchg.rename(columns={'mrio_code': 's'})
 
 
 ########################################################################################
@@ -173,9 +180,9 @@ energy_t_pctchg = energy_t_pctchg.rename(columns={'mrio_code': 's'})
  
 ### Merge databases together
 plt_dset=pd.DataFrame()
-plt_dset['s'] = energy_t_pctchg['s']
+plt_dset['s'] = merged_ee_comb_filt_pctchg['s']
 plt_dset = pd.merge(GDP_years_pctchg, plt_dset, on='s', how='outer')
-plt_dset = pd.merge(energy_t_pctchg, plt_dset, on='s', how='outer')
+plt_dset = pd.merge(merged_ee_comb_filt_pctchg, plt_dset, on='s', how='outer')
 
 
 ### Match with Region Types 
@@ -223,7 +230,7 @@ energy_supp = pd.read_excel("/Users/divyasangaraju/Documents/Work/ADB/IO Publica
 ########################################################################################
 ########################################################################################
 ## Plot Total Energy Producer by Country 
-year = 2021
+year = 2017
 energy_supp = energy_supp.sort_values(by=str(year),ascending=False)
 energy_supp = energy_supp.rename(columns={energy_supp.columns[0]: 'mrio_name'})
 energy_supp['mrio_name']=energy_supp['mrio_name'].str.title()
@@ -273,32 +280,23 @@ plt.show()
 # Close the plot
 plt.close()
 
-
 ########################################################################################
 ########################################################################################
-
-# Largest Energy Emissions in the Region 
-country_dict = pd.read_csv('/Users/divyasangaraju/Documents/Work/ADB/IO Publication/RawData/countries.csv', encoding='latin1')
-energy_t = energy_t.reset_index()
-energy_t = energy_t.rename(columns={'s': 'mrio'})
-energy_t= pd.merge(energy_t, country_dict, on='mrio', how='inner')
-
-########################################################################################
-########################################################################################
-## Plot Total Energy Emissions by Country 
+## Plot Total Energy Generation Emissions by Country 
 year = 2021
-energy_t = energy_t.sort_values(by=year,ascending=False)
-energy_t = energy_t[energy_t.mrio_code!="ROW"]
-energy_t_filt = energy_t[0:20]
+merged_ee_comb_filt = merged_ee_comb_filt.reset_index()
+merged_ee_comb_filt = merged_ee_comb_filt.sort_values(by=str(year),ascending=False)
+merged_ee_comb_filt = merged_ee_comb_filt[merged_ee_comb_filt.mrio_code!="RoW"]
+merged_ee_comb_filt_plt = merged_ee_comb_filt[0:20]
 plt.figure(figsize=(40,20))  # Adjust the size as needed
-ax=sns.barplot(x=energy_t_filt.mrio_code,y=energy_t_filt[year], data=energy_t_filt)
+ax=sns.barplot(x=merged_ee_comb_filt_plt.mrio_code,y=merged_ee_comb_filt_plt[str(year)], data=merged_ee_comb_filt_plt)
 plt.xticks(rotation=90)
 plt.xlabel('Economy', fontsize=30)
-plt.ylabel('Energy Emissions Produced')
+plt.ylabel('Energy Generation Emissions Produced')
 plt.title(year,fontsize=40)
-for index, value in enumerate(energy_t_filt[year]):
+for index, value in enumerate(merged_ee_comb_filt_plt[str(year)]):
     formatted_value = '{:,.0f}'.format(value)  # Format value with comma as thousand separators
-    plt.text(index, value - 900000, formatted_value, ha='center', va='bottom', fontsize=20, color='black', weight='bold',rotation=90)
+    plt.text(index, value - 100000, formatted_value, ha='center', va='bottom', fontsize=20, color='black', weight='bold',rotation=90)
 os.chdir("/Users/divyasangaraju/Documents/Work/ADB/IO Publication/charts")
 plt.savefig("energy_emissions"+str(year)+".png")
 plt.show()
@@ -310,9 +308,9 @@ plt.close()
 ########################################################################################
 
 ## Plot Total Energy Emissions Against Total Energy Supply by Country 
-year = 2020
-energy_t_supp= pd.merge(energy_t, energy_supp, on='mrio_code', how='inner')
-energy_t_supp_yr =energy_t_supp[['mrio_code', year, str(year)]]
+year = 2017
+energy_t_supp= pd.merge(merged_ee_comb_filt, energy_supp, on='mrio_code', how='inner')
+energy_t_supp_yr =energy_t_supp[['mrio_code', str(year)+"_x", str(year)+"_y"]]
 region_dict = region_dict.rename(columns={'s': 'mrio_code'})
 energy_t_supp_yr = pd.merge(energy_t_supp_yr,region_dict,on='mrio_code',how='outer')
 energy_t_supp_yr['Region'] = pd.get_dummies(energy_t_supp_yr['ADB'])
@@ -322,8 +320,8 @@ energy_t_supp_yr['Region'] = energy_t_supp_yr['Region'].replace(replacement_map)
 fig, ax = plt.subplots() 
 colors = ['red', 'royalblue']
 markers = ['.', '+']
-energy_t_supp_yr = energy_t_supp_yr.rename(columns={str(year): 'energy_t'})
-energy_t_supp_yr = energy_t_supp_yr.rename(columns={year: 'energy_s'})
+energy_t_supp_yr = energy_t_supp_yr.rename(columns={ str(year)+"_x": 'energy_t'})
+energy_t_supp_yr = energy_t_supp_yr.rename(columns={ str(year)+"_y": 'energy_s'})
 
 
 for i, value in enumerate(energy_t_supp_yr.Region.unique()):
@@ -333,8 +331,8 @@ for i, value in enumerate(energy_t_supp_yr.Region.unique()):
                      data=energy_t_supp_yr[energy_t_supp_yr.Region == value],
                      label=value, fit_reg=True,robust=True)
 
-plt.ylim(0, 7e8)  # Adjust the range as needed
-plt.xlim(0, 5e7)  # Adjust the range as needed
+plt.ylim(0, 6e6)  # Adjust the range as needed
+plt.xlim(0, 1.6e8)  # Adjust the range as needed
 plt.xlabel('Energy Supply')
 plt.ylabel('Energy Emissions')
 plt.title(year)
@@ -371,17 +369,27 @@ for i in years:
 ########################################################################################
 ########################################################################################
 
-#Plot Output against Emissions 
+#Plot Output against Emissions from Consumption
 year = 2021
     
+merged_ee_comb['consump'] = 1
+merged_ee_comb.loc[(merged_ee_comb['variable'] =='Main Activity Electricity and Heat Production')|(merged_ee_comb['variable'] =='Oil and Natural Gas'), 'consump'] = 0
+merged_ee_comb_filt = merged_ee_comb[merged_ee_comb['consump']==1]
+merged_ee_comb_filt = merged_ee_comb_filt.drop(columns=['consump'])
+merged_ee_comb_filt = merged_ee_comb_filt.groupby('mrio_code').sum()
+
+
 output_years = output_years.rename(columns={'s': 'mrio_code'})
-output_years_em = pd.merge(output_years,energy_t, on='mrio_code', how='outer') 
+output_years_em = pd.merge(output_years,merged_ee_comb_filt, on='mrio_code', how='inner') 
 output_years_em = pd.merge(output_years_em,region_dict,on='mrio_code',how='outer')
 output_years_em['Region'] = pd.get_dummies(output_years_em['ADB'])
 replacement_map = {1: 'ADB Member', 0: 'Non-ADB Member'}
 output_years_em['Region'] = output_years_em['Region'].replace(replacement_map)
-output_years_em = output_years_em.rename(columns={str(year): 'output'})
-output_years_em = output_years_em.rename(columns={year: 'energy_t'})
+output_years_em = output_years_em.rename(columns={str(year)+"_x": 'output'})
+output_years_em = output_years_em.rename(columns={str(year)+"_y": 'energy_t'})
+output_years_em = output_years_em[output_years_em['mrio_code']!='']
+output_years_em = output_years_em[output_years_em['mrio_code']!="ToT"]
+output_years_em = output_years_em.dropna(subset=['mrio_code'])
 
 fig, ax = plt.subplots() 
 colors = ['red', 'royalblue']
@@ -395,10 +403,10 @@ for i, value in enumerate(output_years_em.Region.unique()):
                      data=output_years_em[output_years_em.Region == value],
                      label=value, fit_reg=True,robust=True)
 
-plt.ylim(0, 6e7)  # Adjust the range as needed
-plt.xlim(0, 11e7)  # Adjust the range as needed
+plt.ylim(0, 1e7)  # Adjust the range as needed
+plt.xlim(0, 1.1e8)  # Adjust the range as needed
 plt.xlabel('Total Output')
-plt.ylabel('Energy Emissions')
+plt.ylabel('Energy Consumption Emissions')
 plt.title(year)
 ax.legend(loc='best') 
 os.chdir("/Users/divyasangaraju/Documents/Work/ADB/IO Publication/charts")
@@ -418,17 +426,18 @@ output_years_pctchg = output_years_filt.pct_change(axis=1) * 100
 output_years_pctchg['2017_2021'] = (output_years_filt['2021']/output_years_filt['2017'])-1
 
 # Calculate Emissions Change 
-energy_t_pctchg = pd.DataFrame()
-energy_t_pctchg['s']=energy_t['mrio_code']
-energy_t_pctchg = energy_t_pctchg.set_index('s')
-energy_t_filt = energy_t.set_index('mrio_code')
-energy_t_filt = energy_t_filt[[2017,2018,2019,2020,2021]]
-energy_t_pctchg = energy_t_filt.pct_change(axis=1) * 100
-energy_t_pctchg['2017_2021'] = (energy_t_filt[2021]/energy_t_filt[2017])-1
+merged_ee_comb_filt_pctchg = pd.DataFrame()
+merged_ee_comb_filt = merged_ee_comb_filt.reset_index()
+merged_ee_comb_filt_pctchg['s']=merged_ee_comb_filt['mrio_code']
+merged_ee_comb_filt_pctchg = merged_ee_comb_filt_pctchg.set_index('s')
+merged_ee_comb_plt = merged_ee_comb_filt.set_index('mrio_code')
+merged_ee_comb_plt = merged_ee_comb_plt[["2017","2018","2019","2020","2021"]]
+merged_ee_comb_filt_pctchg = merged_ee_comb_plt.pct_change(axis=1) * 100
+merged_ee_comb_filt_pctchg['2017_2021'] = (merged_ee_comb_plt["2021"]/merged_ee_comb_plt["2017"])-1
 
 # Merge Output Change and Emissions Change Data
 
-output_em_chg = pd.merge(output_years_pctchg,energy_t_pctchg,on='mrio_code')
+output_em_chg = pd.merge(output_years_pctchg,merged_ee_comb_filt_pctchg,on='mrio_code')
 
 output_em_chg = output_em_chg.reset_index()
 
@@ -532,7 +541,7 @@ pivot_df_pctchg['Region'] = pivot_df_pctchg['Region'].replace(replacement_map)
 
 #Merge emissions into the data 
 
-renew_em= pd.merge(pivot_df_pctchg, energy_t_pctchg, on='mrio_code', how='inner')
+renew_em= pd.merge(pivot_df_pctchg, merged_ee_comb_filt_pctchg, on='mrio_code', how='inner')
 renew_em = renew_em.rename(columns={str(year): 'renew_prop'})
 renew_em = renew_em.rename(columns={year: 'energy_t_chg'})
 renew_em = renew_em[renew_em['2017_2021_x']>-20]
@@ -648,14 +657,35 @@ plt.close()
 ## Energy Consumption Emissions 
 
 
+merged_ee_comb['consump'] = 1
+merged_ee_comb.loc[(merged_ee_comb['variable'] =='Main Activity Electricity and Heat Production')|(merged_ee_comb['variable'] =='Oil and Natural Gas'), 'consump'] = 0
+merged_ee_comb_filt = merged_ee_comb[merged_ee_comb['consump']==1]
+merged_ee_comb_filt = merged_ee_comb_filt.groupby('mrio_code').sum()
+merged_ee_comb_filt= merged_ee_comb_filt.reset_index()
 
+########################################################################################
+########################################################################################
 
+#plot barplot of top consumers
 
-
-
-
-
-
+year = 2021
+merged_ee_comb_filt = merged_ee_comb_filt.sort_values(by=str(year),ascending=False)
+merged_ee_comb_filt = merged_ee_comb_filt[merged_ee_comb_filt.mrio_code!="RoW"]
+merged_ee_comb_filt = merged_ee_comb_filt[0:20]
+plt.figure(figsize=(40,20))  # Adjust the size as needed
+ax=sns.barplot(x=merged_ee_comb_filt.mrio_code,y=merged_ee_comb_filt[str(year)], data=merged_ee_comb_filt)
+plt.xticks(rotation=90)
+plt.xlabel('Economy', fontsize=30)
+plt.ylabel('Energy Emissions from Consumption', fontsize=30)
+plt.title(year,fontsize=40)
+for index, value in enumerate(merged_ee_comb_filt[str(year)]):
+    formatted_value = '{:,.0f}'.format(value)  # Format value with comma as thousand separators
+    plt.text(index, value - 200000, formatted_value, ha='center', va='bottom', fontsize=20, color='black', weight='bold',rotation=90)
+os.chdir("/Users/divyasangaraju/Documents/Work/ADB/IO Publication/charts")
+plt.savefig("energy_emissions_consump"+str(year)+".png")
+plt.show()
+# Close the plot
+plt.close()
 
 
 
@@ -671,6 +701,7 @@ year = 2021
 hv.extension('matplotlib')
 hv.output(fig='svg', size=250)
 
+
 eby_energy= eby[eby['sector']=='Energy']
 
 eby_energy['emissions_inmil'] = eby_energy['emissions']/1000000
@@ -683,17 +714,40 @@ e_producer_consumer = e_producer_consumer[['target','source','value']]
 country_dict = pd.read_csv('/Users/divyasangaraju/Documents/Work/ADB/IO Publication/RawData/countries.csv', encoding='latin1')
 country_dict.set_index('mrio')
 node = country_dict[['mrio_code','mrio']]
-node=node.rename(columns={'mrio_code':'name','mrio':'index'})
+node=node.rename(columns={'mrio_code':'name','mrio':'mrio_code'})
 
+# Filtering for ADB members
+e_producer_consumer_temp=e_producer_consumer.rename(columns={'target':'mrio'})
+e_producer_consumer_temp=pd.merge(e_producer_consumer_temp, country_dict,on='mrio',how='inner')
+e_producer_consumer_temp=pd.merge(e_producer_consumer_temp, region_dict,on='mrio_code',how='inner')
+e_producer_consumer_temp = e_producer_consumer_temp[e_producer_consumer_temp['ADB']=="Regional member - Asia Pacific"]
+e_producer_consumer_temp = e_producer_consumer_temp.drop(columns=['ADB'])
+e_producer_consumer_temp=e_producer_consumer_temp.rename(columns={'mrio':'target'})
+e_producer_consumer_temp=e_producer_consumer_temp.rename(columns={'source':'mrio'})
+e_producer_consumer_temp = e_producer_consumer_temp[['target','mrio','value']]
+e_producer_consumer_temp=pd.merge(e_producer_consumer_temp, country_dict,on='mrio')
+e_producer_consumer_temp=pd.merge(e_producer_consumer_temp, region_dict,on='mrio_code')
+e_producer_consumer_temp = e_producer_consumer_temp[e_producer_consumer_temp['ADB']=="Regional member - Asia Pacific"]
+e_producer_consumer_temp=e_producer_consumer_temp.rename(columns={'mrio':'source'})
+e_producer_consumer_temp = e_producer_consumer_temp[['target','source','value']]
 
 ########################################################################################
 ########################################################################################
 # Bilateral Linkage Chart 
-nodes = hv.Dataset(node.reset_index(), 'index')
-e_producer_consumer['value'].fillna(0, inplace=True)
+e_producer_consumer_temp=e_producer_consumer_temp.rename(columns={'target':'mrio_code'})
+
+node2 = pd.merge(node,e_producer_consumer_temp, on='mrio_code',how='inner')
+node2 = node2.set_index('name')
+node2 = node2 [['mrio_code']]
+node2 = node2.drop_duplicates(subset=['mrio_code']).reset_index()
+node2=node2.rename(columns={'mrio_code':'index'})
+nodes = hv.Dataset(node2, 'index')
+e_producer_consumer_temp['value'].fillna(0, inplace=True)
 #customization of chart
-img = hv.Chord((e_producer_consumer, nodes)).select(value=(0.3, None)).opts(
-    opts.Chord(fontsize={'title': 25, 'labels': 15, 'xticks': 20, 'yticks': 20},title="Bilateral Emission Flows " + str(year),cmap='Category10', node_size=10,sublabel_size=35, cbar_width=5,edge_cmap='Category10', edge_color=dim('source').astype(str), labels='name', node_color=dim('index').astype(str)))
+img = hv.Chord((e_producer_consumer_temp, nodes), chordwidth=0.7).select(value=(0.1, None)).opts(
+    opts.Chord(fontsize={'title': 25, 'labels': 40, 'xticks': 40, 'yticks': 40},title="Bilateral Emission Flows " + str(year),cmap='Category10', node_size=5,sublabel_size=40, cbar_width=30,edge_alpha=0.8,edge_linewidth=3.0,edge_cmap='Category10', edge_color=dim('source').astype(str), labels='name', node_color=dim('index').astype(str)))
 hv.render(img)
+
+
 
 
